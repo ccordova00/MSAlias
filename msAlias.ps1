@@ -1,8 +1,8 @@
 <#
-    Author: Corban C.
+    Author: ccordova
     Date modified: 2023-09-08
 
-    #ToDo: Fix delete menu item
+    #ToDo: Fix delete menu item logic
 #>
 # Prompt user for username
 $username = Read-Host "Please enter your username (e.g., user@example.com)"
@@ -28,7 +28,6 @@ while ($true) {
     # Create an alias
     if ($action -eq "1") {
         $newAlias = Read-Host "Enter the new alias you would like to create (e.g., alias@example.com)"
-        #$aliases += $newAlias
         Set-Mailbox $username -EmailAddresses @{Add=$newAlias}
         Write-Host "Alias created."
         #break
@@ -37,9 +36,16 @@ while ($true) {
     # Delete an alias
     elseif ($action -eq "2") {
         $deleteAlias = Read-Host "Enter the alias you would like to delete"
-        if ($aliases -contains $deleteAlias) {
-            $aliases = $aliases | Where-Object { $_ -ne $deleteAlias }
-            Set-Mailbox -Identity $username -ProxyAddresses $aliases
+        
+        # Extract actual email addresses from MatchInfo objects
+        $aliasStrings = $aliases | ForEach-Object { $_.ToString() }
+
+        if ($aliasStrings -contains $deleteAlias) {
+            # Remove the alias
+            $newAliases = $aliasStrings | Where-Object { $_ -ne $deleteAlias }
+            
+            # Update the mailbox
+            Set-Mailbox -Identity $username -EmailAddresses $newAliases
             Write-Host "Alias deleted."
             #break
         }
