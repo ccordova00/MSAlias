@@ -2,16 +2,61 @@
     Author: ccordova
     Date modified: 2023-09-08
 
-    #ToDo: Fix delete menu item logic
+    #ToDo: 
 #>
-# Prompt user for username
-$username = Read-Host "Please enter your username (e.g., user@example.com)"
 
-# Connect to Exchange Online without showing progress
-Connect-ExchangeOnline -UserPrincipalName $username -ShowProgress $false
+Param
+(
+    [Parameter(Mandatory = $false)]
+    [string]$UserName,
+    [string]$Password
+)
+Function Connect_Exo
+{
+ #Check for EXO v2 module inatallation
+ $Module = Get-Module ExchangeOnlineManagement -ListAvailable
+ if($Module.count -eq 0) 
+ { 
+  Write-Host Exchange Online PowerShell V2 module is not available  -ForegroundColor yellow  
+  $Confirm= Read-Host Are you sure you want to install module? [Y] Yes [N] No 
+  if($Confirm -match "[yY]") 
+  { 
+   Write-host "Installing Exchange Online PowerShell module"
+   Install-Module ExchangeOnlineManagement -Repository PSGallery -AllowClobber -Force
+   Import-Module ExchangeOnlineManagement
+  } 
+  else 
+  { 
+   Write-Host EXO V2 module is required to connect Exchange Online.Please install module using Install-Module ExchangeOnlineManagement cmdlet. 
+   Exit
+  }
+ } 
+ Write-Host `nConnecting to Exchange Online...
+ #Storing credential in script for scheduling purpose/ Passing credential as parameter - Authentication using non-MFA account
+ if(($UserName -ne "") -and ($Password -ne ""))
+ {
+  $SecuredPassword = ConvertTo-SecureString -AsPlainText $Password -Force
+  $Credential  = New-Object System.Management.Automation.PSCredential $UserName,$SecuredPassword
+  Connect-ExchangeOnline -Credential $Credential
+ }
+ else
+ {
+  Connect-ExchangeOnline
+ }
+}
+
+
+if($UserName -eq "")
+{
+# Prompt user for username
+    $UserName = Read-Host "Please enter the username of the account you would like to change (e.g., user@example.com)"
+}
+
+# Call connect
+Connect_Exo
 
 # Get the user's email aliases (proxy addresses)
-$user = Get-Mailbox -Identity $username
+$user = Get-Mailbox -Identity $UserName
 $aliases = ($user.EmailAddresses | Select-String -Pattern "smtp")
 If($aliases -eq "")
 {
@@ -28,7 +73,7 @@ while ($true) {
     # Create an alias
     if ($action -eq "1") {
         $newAlias = Read-Host "Enter the new alias you would like to create (e.g., alias@example.com)"
-        Set-Mailbox $username -EmailAddresses @{Add=$newAlias}
+        Set-Mailbox $UserName -EmailAddresses @{Add=$newAlias}
         Write-Host "Alias created."
         #break
     }
@@ -38,14 +83,14 @@ while ($true) {
         $deleteAlias = Read-Host "Enter the alias you would like to delete"
         
         # Extract actual email addresses from MatchInfo objects
-        $aliasStrings = $aliases | ForEach-Object { $_.ToString() }
+        $aliasStrings = $aliases | ForEach-Object { $_.ToString().Substring(5) }
 
         if ($aliasStrings -contains $deleteAlias) {
             # Remove the alias
             $newAliases = $aliasStrings | Where-Object { $_ -ne $deleteAlias }
             
             # Update the mailbox
-            Set-Mailbox -Identity $username -EmailAddresses $newAliases
+            Set-Mailbox -Identity $UserName -EmailAddresses $newAliases
             Write-Host "Alias deleted."
             #break
         }
@@ -66,5 +111,5 @@ while ($true) {
     }
 }
 
-# Disconnect from Exchange Online
-Disconnect-ExchangeOnline -Confirm:$false
+#Disconnect Exchange Online session
+Disconnect-ExchangeOnline -Confirm:$false -InformationAction Ignore -ErrorAction SilentlyContinue
